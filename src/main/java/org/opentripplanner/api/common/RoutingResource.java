@@ -574,8 +574,7 @@ public abstract class RoutingResource {
         if (bannedTripMap != null)
             request.bannedTrips = bannedTripMap;
 
-        if (bannedStops != null)
-            request.setBannedStops(bannedStops);
+        request.setBannedStops(bannedStops);
 
         if (bannedStopsHard != null)
             request.setBannedStopsHard(bannedStopsHard);

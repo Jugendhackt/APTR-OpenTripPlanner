@@ -1,5 +1,7 @@
 package org.opentripplanner.routing.core;
 
+import java.io.IOException;
+import org.opentripplanner.util.HttpUtils;
 import com.google.common.base.Objects;
 import com.google.common.collect.Sets;
 import org.opentripplanner.model.FeedScopedId;
@@ -26,6 +28,8 @@ import org.opentripplanner.util.DateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.InputStream;
+import java.net.URL;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,6 +45,9 @@ import java.util.Map;
 import java.util.TimeZone;
 import java.util.Set;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeConstants;
 import javax.xml.datatype.DatatypeFactory;
@@ -734,9 +741,81 @@ public class RoutingRequest implements Cloneable, Serializable {
         }
     }
 
-    public void setBannedStops(String s) {
-        if (!s.isEmpty()) {
-            bannedStops = StopMatcher.parse(s);
+    public void setBannedStops(String foo) {
+        ArrayList<String> out = new ArrayList<>();
+        if (foo != null) {
+                out.add(foo);
+        }
+
+        if (this.wheelchairAccessible) {
+
+            String url = "http://127.0.0.1:1337/getAllDisruptionsWithASS";
+
+            try {
+                InputStream data = null;
+
+                URL url2 = new URL(url);
+                String proto = url2.getProtocol();
+                if (proto.equals("http") || proto.equals("https")) {
+                    data = HttpUtils.getData(url);
+                } else {
+                    // Local file probably, try standard java
+                    data = url2.openStream();
+                }
+                // TODO handle optional GBFS files, where it's not warning-worthy that they don't exist.
+                if (data != null) {
+
+
+
+                    java.util.Scanner scanner = null;
+                    String jsonString="";
+                    try {
+
+                        scanner = new java.util.Scanner(data).useDelimiter("\\A");
+                        jsonString = scanner.hasNext() ? scanner.next() : "";
+                        scanner.close();
+                    }
+                    finally
+                    {
+                        if(scanner!=null)
+                            scanner.close();
+                    }
+                    System.out.println(jsonString);
+
+
+
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode rootNode = mapper.readTree(jsonString);
+
+                    for (int i = 0; i < rootNode.size(); i++) {
+                        // TODO can we use foreach? for (JsonNode node : rootNode) ...
+                        JsonNode node = rootNode.get(i);
+                        if (node == null) {
+                            continue;
+                        }
+                        String n = "";
+                        n += "1:";
+                        n += node.path("ass").asText();
+                        out.add(n);
+                        System.out.println(n);
+                    }
+
+                    data.close();
+                } else {
+                    LOG.warn("Failed to get data from url " + url);
+                }
+            } catch (IllegalArgumentException e) {
+                LOG.warn("Error parsing accessibility data", e);
+            } catch (JsonProcessingException e) {
+                LOG.warn("Error parsing accessibility data (bad JSON of some sort)", e);
+            } catch (IOException e) {
+                LOG.warn("Error reading accessibility data", e);
+            }
+        }
+        System.out.println("!");
+
+        if (!out.isEmpty()) {
+            bannedStops = StopMatcher.parse(String.join(", ", out));
         }
         else {
             bannedStops = StopMatcher.emptyMatcher();
